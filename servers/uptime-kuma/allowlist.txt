@@ -1,0 +1,39 @@
+# Tools of the mcp-uptime-kuma server (image pinned in Dockerfile) that the
+# proxy lets through.
+# Scope decided 2026-10-19: Claude configures alarms but deletes nothing.
+# Every delete*, status-page change, and Docker-host change stays in the
+# Uptime Kuma interface. A tool missing from this file is hidden and refused,
+# so tools added upstream stay blocked until they are listed here.
+# Tool names checked against upstream v0.12.0 (src/server.ts).
+
+# Read
+getMonitorSummary
+listMonitors
+listMonitorTypes
+getMonitor
+listHeartbeats
+getHeartbeats
+listNotifications
+listTags
+getMaintenanceWindows
+listStatusPages
+getStatusPage
+listDockerHosts
+getSettings
+
+# Monitors: create, change, pause, and resume (pause instead of delete)
+createMonitor
+updateMonitor
+pauseMonitor
+resumeMonitor
+
+# Notifications and tags: add and change
+addNotification
+updateNotification
+addTag
+
+# Maintenance windows: create, change, pause, and resume
+createMaintenance
+updateMaintenance
+pauseMaintenance
+resumeMaintenance

@@ -1,0 +1,176 @@
+---
+name: CI
+
+# yamllint disable-line rule:truthy
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  schedule:
+    # Weekly, so new advisories and registry changes surface without a push.
+    - cron: '17 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  GOLANGCI_LINT_VERSION: v2.14.0
+  GOVULNCHECK_VERSION: v1.9.0
+  ACTIONLINT_VERSION: v1.7.12
+  YAMLLINT_VERSION: 1.38.0
+  SHELLCHECK_PY_VERSION: 0.11.0.1
+  PRE_COMMIT_VERSION: 4.7.0
+  CHECK_JSONSCHEMA_VERSION: 0.37.4
+  GITLEAKS_VERSION: 8.21.2
+  GITLEAKS_SHA256: 5bc41815076e6ed6ef8fbecc9d9b75bcae31f39029ceb55da08086315316e3ba
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e  # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - name: Run golangci-lint for Linux
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a  # v9.3.0
+        with:
+          version: ${{ env.GOLANGCI_LINT_VERSION }}
+          install-mode: goinstall
+
+      - name: Run golangci-lint for macOS
+        env:
+          GOOS: darwin
+        run: go run "github.com/golangci/golangci-lint/v2/cmd/golangci-lint@${GOLANGCI_LINT_VERSION}" run ./...
+
+      - name: Run shellcheck
+        run: |
+          pipx install "shellcheck-py==${SHELLCHECK_PY_VERSION}"
+          shellcheck --version
+          shellcheck -s sh scripts/*.sh
+
+      - name: Run yamllint
+        run: |
+          pipx install "yamllint==${YAMLLINT_VERSION}"
+          yamllint --strict .
+
+      - name: Check workflow and Dependabot files against their schemas
+        run: |
+          pipx install "check-jsonschema==${CHECK_JSONSCHEMA_VERSION}"
+          check-jsonschema --builtin-schema vendor.github-workflows .github/workflows/*.yaml
+          check-jsonschema --builtin-schema vendor.dependabot .github/dependabot.yml
+
+      # actionlint skips run: blocks silently when shellcheck is missing.
+      - name: Run actionlint
+        run: |
+          command -v shellcheck
+          go run "github.com/rhysd/actionlint/cmd/actionlint@${ACTIONLINT_VERSION}"
+
+      # The remaining pre-commit hooks only; the ones skipped run above or in
+      # the secrets job, so no tool runs twice.
+      - name: Run pre-commit
+        env:
+          SKIP: golangci-lint,ripsecrets,detect-private-key,check-yaml
+        run: |
+          pipx install "pre-commit==${PRE_COMMIT_VERSION}"
+          pre-commit run --all-files --show-diff-on-failure
+
+  secrets:
+    name: Secret scan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out the full history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Require an unshallow clone
+        run: test "$(git rev-parse --is-shallow-repository)" = false
+
+      - name: Install gitleaks
+        run: |
+          set -euo pipefail
+          tarball="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          curl -sSfL -o "${RUNNER_TEMP}/${tarball}" \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/${tarball}"
+          echo "${GITLEAKS_SHA256}  ${RUNNER_TEMP}/${tarball}" | sha256sum -c -
+          tar -xzf "${RUNNER_TEMP}/${tarball}" -C "${RUNNER_TEMP}" gitleaks
+          "${RUNNER_TEMP}/gitleaks" version
+
+      - name: Run gitleaks over the full history
+        run: '"${RUNNER_TEMP}/gitleaks" git --no-banner --redact --verbose .'
+
+  test:
+    name: Test and build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e  # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - name: Test with the race detector
+        run: go test -race -coverprofile=coverage.out ./...
+
+      - name: Require 90 percent coverage
+        run: |
+          total=$(go tool cover -func=coverage.out | awk '/^total:/ {sub("%", "", $3); print $3}')
+          echo "Total coverage: ${total}%"
+          awk -v t="$total" 'BEGIN { exit (t >= 90) ? 0 : 1 }'
+
+      - name: Run govulncheck
+        run: go run "golang.org/x/vuln/cmd/govulncheck@${GOVULNCHECK_VERSION}" ./...
+
+      - name: Build for macOS and Linux
+        run: |
+          for target in darwin/arm64 darwin/amd64 linux/amd64; do
+            CGO_ENABLED=0 GOOS="${target%/*}" GOARCH="${target#*/}" go build -trimpath -o /dev/null ./cmd/mcp-allowlist-proxy
+          done
+
+  servers:
+    name: Server allowlists
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e  # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - name: Build the proxy
+        run: CGO_ENABLED=0 go build -o bin/mcp-allowlist-proxy ./cmd/mcp-allowlist-proxy
+
+      - name: Check uptime-kuma's tools against its allowlist and hidden list
+        run: |
+          set -euo pipefail
+          test "$(grep -c '^FROM ' servers/uptime-kuma/Dockerfile)" -eq 1
+          image=$(sed -n 's/^FROM \([^ ]*\).*/\1/p' servers/uptime-kuma/Dockerfile)
+          echo "image: ${image}"
+          if ! printf '%s\n' "${image}" | grep -Eq '^[^@ ]+:[^@: ]+@sha256:[0-9a-f]{64}$'; then
+            echo "the image in servers/uptime-kuma/Dockerfile is not pinned by tag and full digest" >&2
+            exit 1
+          fi
+          docker pull --quiet "${image}"
+          sh scripts/check-server-tools.sh bin/mcp-allowlist-proxy servers/uptime-kuma -- \
+            docker run --rm -i --network none --cap-drop ALL --security-opt no-new-privileges \
+            --pids-limit 256 --memory 512m -e UPTIME_KUMA_URL=http://127.0.0.1:9 "${image}"

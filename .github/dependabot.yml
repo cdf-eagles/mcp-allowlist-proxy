@@ -1,0 +1,22 @@
+---
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
+
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+
+  # One pull request per server image bump: the server allowlist check fails
+  # until every new tool is added to allowlist.txt or hidden.txt.
+  - package-ecosystem: docker
+    directory: /servers/uptime-kuma
+    schedule:
+      interval: weekly
