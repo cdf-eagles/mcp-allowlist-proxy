@@ -40,7 +40,7 @@ it, can see and call. It does not limit the **server**.
 
 ## Build
 
-Go 1.27.2 or later, no other dependencies:
+Go 1.27.3 or later, no other dependencies:
 
 ```sh
 go build -o bin/mcp-allowlist-proxy ./cmd/mcp-allowlist-proxy
@@ -158,10 +158,11 @@ CI passes, merge, then deploy the same tag and digest and restart the client.
 `.github/workflows/ci.yaml` runs on every pull request and push to `main`,
 and weekly:
 
-- **Lint**: golangci-lint for Linux and macOS, shellcheck, yamllint, the
-  workflow and Dependabot schemas, actionlint, and the remaining pre-commit
-  hooks (each tool runs once).
-- **Secret scan**: gitleaks over the full history, from a checksum-verified
+- **Lint**: golangci-lint for Linux and macOS, shellcheck, yamllint, and the
+  pre-commit hooks, which include the workflow and Dependabot schemas,
+  actionlint, ripsecrets, and detect-private-key (each tool runs once).
+- **Secret scan**: gitleaks over the history of the checked-out commit (on a
+  pull request, `main` plus the pull request), from a checksum-verified
   release, on an unshallow clone.
 - **Test and build**: `go test -race` with at least 90 percent coverage,
   govulncheck, and builds for macOS (arm64 and amd64) and Linux.
@@ -170,19 +171,23 @@ and weekly:
   image, run with no network, no capabilities, and limited processes and
   memory. A paged tool list fails the check.
 
-Every action is pinned to a commit, and every tool CI installs (Go modules
-and Python tools) to an exact version; the runner image is pinned to Ubuntu
-24.04, whose own packages are not. Dependabot updates actions, Go, and the
-server images weekly; the tool versions in the workflow's `env` are updated
-by hand.
+Every action is pinned to a commit, and every tool CI installs to an exact
+version; the runner image is pinned to Ubuntu 24.04, whose own packages are
+not. Tool versions live where Dependabot updates them weekly: the Python
+tools in `ci/requirements.txt`, actionlint and the golangci-lint version in
+`.pre-commit-config.yaml`, and govulncheck in `ci/tools/go.mod`, a separate
+module that stays out of the build. gitleaks is pinned with its checksum in
+the workflow, and the weekly run's **Tool drift** job opens an issue when it
+falls behind its latest release.
 
 ## Development
 
 Gates before committing: `go test -race ./...` (coverage at least 90
 percent), `golangci-lint run ./...` for `GOOS=linux` and `GOOS=darwin` with
-the committed `.golangci.yml`, `govulncheck ./...`, `shellcheck -s sh` on
-every shell script, `yamllint --strict .`, `actionlint`, and
-`pre-commit run --all-files`.
+the committed `.golangci.yml`, `go tool -modfile=ci/tools/go.mod govulncheck ./...`,
+`shellcheck -s sh` on every shell script, `yamllint --strict .`, and
+`pre-commit run --all-files`. Run `pre-commit install` once per clone: it also
+installs a push hook that runs gitleaks over the commits being pushed.
 
 ## License
 

@@ -20,3 +20,27 @@ updates:
     directory: /servers/uptime-kuma
     schedule:
       interval: weekly
+
+  - package-ecosystem: gomod
+    directory: /ci/tools
+    schedule:
+      interval: weekly
+    groups:
+      ci-go-tools:
+        patterns: ["*"]
+
+  - package-ecosystem: pip
+    directory: /ci
+    schedule:
+      interval: weekly
+    groups:
+      ci-python-tools:
+        patterns: ["*"]
+
+  - package-ecosystem: pre-commit
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      pre-commit-hooks:
+        patterns: ["*"]
