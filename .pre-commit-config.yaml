@@ -1,5 +1,11 @@
 ---
+default_install_hook_types: [pre-commit, pre-push]
 repos:
+  - repo: https://github.com/python-jsonschema/check-jsonschema
+    rev: 0.38.2
+    hooks:
+      - id: check-github-workflows
+      - id: check-dependabot
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
     hooks:
@@ -15,4 +21,16 @@ repos:
     rev: v2.14.0
     hooks:
       - id: golangci-lint
-        language_version: 1.27.2
+        language_version: 1.27.3
+  - repo: https://github.com/rhysd/actionlint
+    rev: v1.7.12
+    hooks:
+      - id: actionlint
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.1
+    hooks:
+      - id: gitleaks
+        name: gitleaks (commits being pushed)
+        stages: [pre-push]
+        always_run: true
+        entry: sh -c 'gitleaks git --no-banner --redact --log-opts="${PRE_COMMIT_FROM_REF:+$PRE_COMMIT_FROM_REF..}$PRE_COMMIT_TO_REF" .'

@@ -20,13 +20,6 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
-  GOLANGCI_LINT_VERSION: v2.14.0
-  GOVULNCHECK_VERSION: v1.9.0
-  ACTIONLINT_VERSION: v1.7.12
-  YAMLLINT_VERSION: 1.38.0
-  SHELLCHECK_PY_VERSION: 0.11.0.1
-  PRE_COMMIT_VERSION: 4.7.0
-  CHECK_JSONSCHEMA_VERSION: 0.37.4
   GITLEAKS_VERSION: 8.21.2
   GITLEAKS_SHA256: 5bc41815076e6ed6ef8fbecc9d9b75bcae31f39029ceb55da08086315316e3ba
 
@@ -38,55 +31,65 @@ jobs:
     steps:
       - name: Check out code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e  # v7.0.0
         with:
           go-version-file: go.mod
 
+      # Dependabot updates the hook's rev, so both golangci-lint steps take their version from it.
+      - name: Read the golangci-lint version from .pre-commit-config.yaml
+        id: golangci_lint
+        run: |
+          set -euo pipefail
+          version=$(awk '/repo: https:\/\/github.com\/golangci\/golangci-lint$/ { getline; print $2 }' .pre-commit-config.yaml)
+          case "${version}" in
+            v[0-9]*.[0-9]*.[0-9]*) echo "version=${version}" >> "${GITHUB_OUTPUT}" ;;
+            *) echo "::error::No golangci-lint rev in .pre-commit-config.yaml"; exit 1 ;;
+          esac
+
       - name: Run golangci-lint for Linux
         uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a  # v9.3.0
         with:
-          version: ${{ env.GOLANGCI_LINT_VERSION }}
+          version: ${{ steps.golangci_lint.outputs.version }}
           install-mode: goinstall
 
       - name: Run golangci-lint for macOS
         env:
           GOTOOLCHAIN: local
+          GOLANGCI_LINT_REV: ${{ steps.golangci_lint.outputs.version }}
         run: |
-          go install "github.com/golangci/golangci-lint/v2/cmd/golangci-lint@${GOLANGCI_LINT_VERSION}"
+          go install "github.com/golangci/golangci-lint/v2/cmd/golangci-lint@${GOLANGCI_LINT_REV}"
           GOOS=darwin "$(go env GOPATH)/bin/golangci-lint" run ./...
+
+      - name: Install the Python tools
+        run: |
+          set -euo pipefail
+          python3 -m venv "${RUNNER_TEMP}/venv"
+          "${RUNNER_TEMP}/venv/bin/pip" install --quiet --require-virtualenv -r ci/requirements.txt
+          echo "${RUNNER_TEMP}/venv/bin" >> "${GITHUB_PATH}"
 
       - name: Run shellcheck
         run: |
-          pipx install "shellcheck-py==${SHELLCHECK_PY_VERSION}"
           shellcheck --version
           shellcheck -s sh scripts/*.sh
 
       - name: Run yamllint
         run: |
-          pipx install "yamllint==${YAMLLINT_VERSION}"
+          yamllint --version
           yamllint --strict .
 
-      - name: Check workflow and Dependabot files against their schemas
-        run: |
-          pipx install "check-jsonschema==${CHECK_JSONSCHEMA_VERSION}"
-          check-jsonschema --builtin-schema vendor.github-workflows .github/workflows/*.yaml
-          check-jsonschema --builtin-schema vendor.dependabot .github/dependabot.yml
-
-      # actionlint skips run: blocks silently when shellcheck is missing.
-      - name: Run actionlint
-        run: |
-          command -v shellcheck
-          go run "github.com/rhysd/actionlint/cmd/actionlint@${ACTIONLINT_VERSION}"
-
-      # The remaining pre-commit hooks only; the ones skipped run above or in
-      # the secrets job, so no tool runs twice.
-      - name: Run pre-commit
+      # golangci-lint runs above and yamllint covers check-yaml; actionlint turns
+      # its shellcheck checks off when shellcheck is not on PATH.
+      - name: Run actionlint and the remaining pre-commit hooks
         env:
-          SKIP: golangci-lint,ripsecrets,detect-private-key,check-yaml
+          SKIP: golangci-lint,check-yaml
         run: |
-          pipx install "pre-commit==${PRE_COMMIT_VERSION}"
+          set -euo pipefail
+          command -v shellcheck
+          pre-commit --version
           pre-commit run --all-files --show-diff-on-failure
 
   secrets:
@@ -98,6 +101,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Require an unshallow clone
         run: test "$(git rev-parse --is-shallow-repository)" = false
@@ -112,8 +116,8 @@ jobs:
           tar -xzf "${RUNNER_TEMP}/${tarball}" -C "${RUNNER_TEMP}" gitleaks
           "${RUNNER_TEMP}/gitleaks" version
 
-      - name: Run gitleaks over the full history
-        run: '"${RUNNER_TEMP}/gitleaks" git --no-banner --redact --verbose .'
+      - name: Run gitleaks over the history of the checked-out commit
+        run: '"${RUNNER_TEMP}/gitleaks" git --no-banner --redact --verbose --log-opts="HEAD" .'
 
   test:
     name: Test and build
@@ -122,6 +126,8 @@ jobs:
     steps:
       - name: Check out code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e  # v7.0.0
@@ -138,7 +144,7 @@ jobs:
           awk -v t="$total" 'BEGIN { exit (t >= 90) ? 0 : 1 }'
 
       - name: Run govulncheck
-        run: go run "golang.org/x/vuln/cmd/govulncheck@${GOVULNCHECK_VERSION}" ./...
+        run: go tool -modfile=ci/tools/go.mod govulncheck ./...
 
       - name: Build for macOS and Linux
         run: |
@@ -153,6 +159,8 @@ jobs:
     steps:
       - name: Check out code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e  # v7.0.0
@@ -176,3 +184,11 @@ jobs:
           sh scripts/check-server-tools.sh bin/mcp-allowlist-proxy servers/uptime-kuma -- \
             docker run --rm -i --network none --cap-drop ALL --security-opt no-new-privileges \
             --pids-limit 256 --memory 512m -e UPTIME_KUMA_URL=http://127.0.0.1:9 "${image}"
+
+  tool-drift:
+    name: Tool drift
+    if: github.event_name == 'schedule'
+    permissions:
+      contents: read
+      issues: write
+    uses: cdf-eagles/.github/.github/workflows/tool-drift.yaml@4f61e172889ba89b4b32a8ebdc798d432c507ba7  # v1.0.0

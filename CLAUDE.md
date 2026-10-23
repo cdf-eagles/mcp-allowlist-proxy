@@ -30,17 +30,21 @@ repository and are not repeated here.
 - Gates before staging: `go test -race ./...` (coverage at least 90
   percent), `golangci-lint run ./...` for `GOOS=linux` and `GOOS=darwin` with
   the committed `.golangci.yml` (golangci-lint built with the Go version in
-  `go.mod`), `govulncheck ./...`, `shellcheck -s sh` on every shell script,
-  `yamllint --strict .`, `actionlint`, and `pre-commit run --all-files`.
+  `go.mod`), `go tool -modfile=ci/tools/go.mod govulncheck ./...`,
+  `shellcheck -s sh` on every shell script, `yamllint --strict .`, and
+  `pre-commit run --all-files`.
 
 ## CI
 
 - `.github/workflows/ci.yaml` is mandatory and follows the vault's Repository
   and CI Standards: every gate runs once, gitleaks scans the full history on
-  an unshallow clone, and workflow files are checked by schema and
-  actionlint. Actions are pinned to a commit SHA with the tag in a comment;
-  tools and the runner image are pinned to a version (tools in the workflow's
-  `env`). Never use `@latest` or a floating major.
+  an unshallow clone (`--log-opts="HEAD"`), and workflow files are checked
+  by schema and actionlint. Actions are pinned to a commit SHA with the tag
+  in a comment; tools and the runner image are pinned to a version. Tool
+  versions live in `ci/requirements.txt`, `.pre-commit-config.yaml`, and
+  `ci/tools/go.mod`, where Dependabot updates them; only a release download
+  verified by checksum (gitleaks) is pinned in the workflow's `env`. Never
+  use `@latest` or a floating major.
 - Branches: `main` only; work branches are squash merged into `main` by pull
   request.
 
