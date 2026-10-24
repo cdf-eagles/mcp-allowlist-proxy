@@ -170,7 +170,10 @@ jobs:
       - name: Build the proxy
         run: CGO_ENABLED=0 go build -o bin/mcp-allowlist-proxy ./cmd/mcp-allowlist-proxy
 
-      - name: Check uptime-kuma's tools against its allowlist and hidden list
+      - name: Test the server check script
+        run: sh scripts/test-check-server-tools.sh bin/mcp-allowlist-proxy
+
+      - name: Check uptime-kuma's tools against its allowlist, hidden list, and tool lock
         run: |
           set -euo pipefail
           test "$(grep -c '^FROM ' servers/uptime-kuma/Dockerfile)" -eq 1

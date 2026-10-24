@@ -31,7 +31,8 @@ repository and are not repeated here.
   percent), `golangci-lint run ./...` for `GOOS=linux` and `GOOS=darwin` with
   the committed `.golangci.yml` (golangci-lint built with the Go version in
   `go.mod`), `go tool -modfile=ci/tools/go.mod govulncheck ./...`,
-  `shellcheck -s sh` on every shell script, `yamllint --strict .`, and
+  `shellcheck -s sh` on every shell script, `yamllint --strict .`,
+  `sh scripts/test-check-server-tools.sh bin/mcp-allowlist-proxy`, and
   `pre-commit run --all-files`.
 
 ## CI
@@ -51,11 +52,15 @@ repository and are not repeated here.
 ## Servers
 
 - `servers/<name>/` holds `allowlist.txt` (allowed), `hidden.txt` (reviewed
-  and refused), and `Dockerfile`, a pin that is never built: one `FROM` line
-  naming the server image by tag and digest.
+  and refused), `tools.lock` (hashes of each allowed tool's description,
+  input schema, and other fields, written by
+  `scripts/check-server-tools.sh -w`), and `Dockerfile`, a pin that is never
+  built: one `FROM` line naming the server image by tag and digest.
 - Every tool the pinned image offers is in exactly one of the two lists;
   `scripts/check-server-tools.sh` enforces it in CI. A server bump decides
-  each new tool explicitly, with a dated comment.
+  each new tool explicitly, with a dated comment, and regenerates
+  `tools.lock`; the new text of every changed tool is read before the
+  regenerated file is committed.
 - No site-specific values (hosts, accounts, secret paths) in this
   repository; they live in the client's configuration and the deployment.
 - Node.js is not a dependency of this repository: servers are checked and
