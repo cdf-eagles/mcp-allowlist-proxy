@@ -26,6 +26,13 @@ it, can see and call. It does not limit the **server**.
 - In remote mode the allowlist is enforced where the proxy runs, not at the
   endpoint. Anyone holding the endpoint's bearer token can call every tool
   the server offers directly. Treat that token like the backend credential.
+- The proxy does not inspect tool descriptions or input schemas either. They
+  reach the client as the server sends them, and a description can carry
+  instructions meant for the model. CI covers the pinned image only:
+  `tools.lock` holds a hash of each allowed tool's metadata, and a server
+  bump that changes any of it fails until someone regenerates the file and
+  reads what changed. A server that answers differently at run time than the
+  image CI tested is not caught.
 - The proxy does not inspect tool arguments or results. An allowed tool can
   do everything that tool does: `updateMonitor` can rewrite a monitor
   completely. Some tools reach further than their names suggest: a
@@ -94,6 +101,27 @@ tool in neither file, when an allowlisted tool disappears, or when a hidden
 tool is no longer offered. A server upgrade therefore cannot merge until
 every tool it offers has been decided.
 
+Each server directory also keeps `tools.lock`: one line per allowed tool with
+the SHA-256 hash of its description, of its input schema, and of every other
+field of its entry in the tool list (title, output schema, annotations, and
+so on), each hashed as canonical JSON. `scripts/check-server-tools.sh`
+computes the same hashes from the tool list as the client sees it, and fails
+when any hash differs, when an allowed tool has no line, or when a line has
+no tool. Hidden tools are refused and never reach the client, so they are not
+hashed. Write the file with `-w`, which needs `jq` 1.7 or later and writes
+only after the other checks pass:
+
+```sh
+image=$(sed -n 's/^FROM \([^ ]*\).*/\1/p' servers/uptime-kuma/Dockerfile)
+sh scripts/check-server-tools.sh -w bin/mcp-allowlist-proxy servers/uptime-kuma -- \
+  docker run --rm -i --network none --cap-drop ALL --security-opt no-new-privileges \
+  --pids-limit 256 --memory 512m -e UPTIME_KUMA_URL=http://127.0.0.1:9 "$image"
+```
+
+The file holds hashes, so its diff shows which tools changed and which part,
+not what the new text says. Read the new descriptions in the server's
+release notes or source before committing it.
+
 ## What the proxy checks
 
 - Every message in either direction must be a single JSON object. JSON-RPC
@@ -109,8 +137,8 @@ every tool it offers has been decided.
 
 ## Servers
 
-Each directory under `servers/` holds an allowlist, a hidden list, and the
-pin of the server they were reviewed against.
+Each directory under `servers/` holds an allowlist, a hidden list, a tool
+lock, and the pin of the server they were reviewed against.
 
 ### servers/uptime-kuma
 
@@ -150,8 +178,9 @@ in 15 minutes; behind a reverse proxy without `TRUST_PROXY`, every client
 shares one budget.
 
 Upgrading: Dependabot opens one pull request per image release. Read the
-release notes, decide every new tool in `allowlist.txt` or `hidden.txt` until
-CI passes, merge, then deploy the same tag and digest and restart the client.
+release notes, decide every new tool in `allowlist.txt` or `hidden.txt`,
+regenerate `tools.lock` and read what each changed tool now says, until CI
+passes, merge, then deploy the same tag and digest and restart the client.
 
 ## CI
 
@@ -169,7 +198,10 @@ and weekly:
 - **Server allowlists**: for each server, a check that its image is pinned by
   tag and full digest, then `scripts/check-server-tools.sh` against that
   image, run with no network, no capabilities, and limited processes and
-  memory. A paged tool list fails the check.
+  memory. A paged tool list fails the check, and so does an allowed tool whose
+  description, input schema, or any other field differs from `tools.lock`.
+  `scripts/test-check-server-tools.sh` first tests that script against a fake
+  server.
 
 Every action is pinned to a commit, and every tool CI installs to an exact
 version; the runner image is pinned to Ubuntu 24.04, whose own packages are
@@ -185,8 +217,9 @@ falls behind its latest release.
 Gates before committing: `go test -race ./...` (coverage at least 90
 percent), `golangci-lint run ./...` for `GOOS=linux` and `GOOS=darwin` with
 the committed `.golangci.yml`, `go tool -modfile=ci/tools/go.mod govulncheck ./...`,
-`shellcheck -s sh` on every shell script, `yamllint --strict .`, and
-`pre-commit run --all-files`. Run `pre-commit install` once per clone: it also
+`shellcheck -s sh` on every shell script, `yamllint --strict .`,
+`sh scripts/test-check-server-tools.sh bin/mcp-allowlist-proxy` (needs `jq`),
+and `pre-commit run --all-files`. Run `pre-commit install` once per clone: it also
 installs a push hook that runs gitleaks over the commits being pushed.
 
 ## License
