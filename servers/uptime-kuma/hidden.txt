@@ -3,7 +3,7 @@
 # scripts/check-server-tools.sh (run in CI) fails when the pinned image offers
 # a tool that is in neither file, so a version bump that adds a tool cannot
 # pass until the tool is decided.
-# Reviewed against v0.12.0 (decided 2026-10-19: no deletes, no status-page or
+# Reviewed against v0.12.1 on 2026-10-24 (decided 2026-10-19: no deletes, no status-page or
 # Docker-host changes).
 
 deleteMonitor
