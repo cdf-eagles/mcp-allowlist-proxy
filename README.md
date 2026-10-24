@@ -144,7 +144,7 @@ lock, and the pin of the server they were reviewed against.
 
 For [mcp-uptime-kuma](https://github.com/DavidFuchs/mcp-uptime-kuma), run as
 its container image. `Dockerfile` is a pin, never built: it records
-`davidfuchs/mcp-uptime-kuma` **0.12.0** by tag and digest, which is the image
+`davidfuchs/mcp-uptime-kuma` **0.12.1** by tag and digest, which is the image
 CI checks the lists against and the one to deploy.
 
 The allowlist admits reading, and creating, changing, pausing, and resuming

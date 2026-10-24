@@ -4,7 +4,7 @@
 # Every delete*, status-page change, and Docker-host change stays in the
 # Uptime Kuma interface. A tool missing from this file is hidden and refused,
 # so tools added upstream stay blocked until they are listed here.
-# Tool names checked against upstream v0.12.0 (src/server.ts).
+# Tool names checked against upstream v0.12.1 (src/server.ts; reviewed 2026-10-24).
 
 # Read
 getMonitorSummary
