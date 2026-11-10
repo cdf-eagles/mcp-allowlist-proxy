@@ -194,4 +194,4 @@ jobs:
     permissions:
       contents: read
       issues: write
-    uses: cdf-eagles/.github/.github/workflows/tool-drift.yaml@4f61e172889ba89b4b32a8ebdc798d432c507ba7  # v1.0.0
+    uses: cdf-eagles/.github/.github/workflows/tool-drift.yaml@6f234c67ef07148871d620fa023a8ddfc5d5a31c  # v1.1.0
