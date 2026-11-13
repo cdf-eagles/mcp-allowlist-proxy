@@ -21,7 +21,7 @@ repos:
     rev: v2.15.0
     hooks:
       - id: golangci-lint
-        language_version: 1.27.3
+        language_version: 1.27.4
   - repo: https://github.com/rhysd/actionlint
     rev: v1.7.12
     hooks:

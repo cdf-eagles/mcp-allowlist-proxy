@@ -47,7 +47,7 @@ it, can see and call. It does not limit the **server**.
 
 ## Build
 
-Go 1.27.3 or later, no other dependencies:
+Go 1.27.4 or later, no other dependencies:
 
 ```sh
 go build -o bin/mcp-allowlist-proxy ./cmd/mcp-allowlist-proxy
