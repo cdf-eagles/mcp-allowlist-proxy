@@ -1,0 +1,19 @@
+# Tools of the Snyk CLI's MCP server (the release pinned by SNYK_VERSION in
+# .github/workflows/ci.yaml) that were reviewed and are deliberately NOT on
+# the allowlist.
+# scripts/check-server-tools.sh (run in CI) fails when the pinned release
+# offers a tool that is in neither file, so a version bump that adds a tool
+# cannot pass until the tool is decided.
+# Reviewed against the CLI 1.1308.4 tool list on 2026-11-14.
+
+# Starts a browser sign-in; the token comes from the client's environment.
+snyk_auth
+
+# Removes the CLI's stored sign-in.
+snyk_logout
+
+# Marks a folder trusted; the server runs with folder trust disabled.
+snyk_trust
+
+# Sends free-text feedback to Snyk.
+snyk_send_feedback
