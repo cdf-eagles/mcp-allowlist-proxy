@@ -1,0 +1,17 @@
+# Tools of the Snyk CLI's MCP server (snyk mcp -t stdio --profile=lite
+# --disable-trust; the release pinned by SNYK_VERSION in
+# .github/workflows/ci.yaml) that the proxy lets through.
+# Scope decided 2026-11-14: scans and the version only. Signing in, signing
+# out, folder trust, and feedback stay outside the client. A tool missing
+# from this file is hidden and refused, so tools added upstream stay blocked
+# until they are listed here.
+# Tool names checked against the CLI 1.1308.4 tool list (reviewed 2026-11-14).
+
+# Open source dependency scan (snyk test); runs the project's package manager
+snyk_sca_scan
+
+# Static analysis (Snyk Code); uploads the scanned source to Snyk
+snyk_code_scan
+
+# Version
+snyk_version

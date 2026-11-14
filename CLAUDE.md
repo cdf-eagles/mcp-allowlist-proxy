@@ -44,7 +44,8 @@ repository and are not repeated here.
   in a comment; tools and the runner image are pinned to a version. Tool
   versions live in `ci/requirements.txt`, `.pre-commit-config.yaml`, and
   `ci/tools/go.mod`, where Dependabot updates them; only a release download
-  verified by checksum (gitleaks) is pinned in the workflow's `env`. Never
+  verified by checksum (gitleaks, the Snyk CLI) is pinned in the workflow's
+  `env`. Never
   use `@latest` or a floating major.
 - Branches: `main` only; work branches are squash merged into `main` by pull
   request.
@@ -54,9 +55,11 @@ repository and are not repeated here.
 - `servers/<name>/` holds `allowlist.txt` (allowed), `hidden.txt` (reviewed
   and refused), `tools.lock` (hashes of each allowed tool's description,
   input schema, and other fields, written by
-  `scripts/check-server-tools.sh -w`), and `Dockerfile`, a pin that is never
-  built: one `FROM` line naming the server image by tag and digest.
-- Every tool the pinned image offers is in exactly one of the two lists;
+  `scripts/check-server-tools.sh -w`), and the server's pin: `Dockerfile`,
+  never built, one `FROM` line naming the server image by tag and digest; or,
+  for a server that is a release binary (`snyk-cli`), the release's version
+  and checksum in the workflow's `env`, which CI downloads and verifies.
+- Every tool the pinned server offers is in exactly one of the two lists;
   `scripts/check-server-tools.sh` enforces it in CI. A server bump decides
   each new tool explicitly, with a dated comment, and regenerates
   `tools.lock`; the new text of every changed tool is read before the
@@ -64,4 +67,4 @@ repository and are not repeated here.
 - No site-specific values (hosts, accounts, secret paths) in this
   repository; they live in the client's configuration and the deployment.
 - Node.js is not a dependency of this repository: servers are checked and
-  run as their images.
+  run as their images or as self-contained release binaries.

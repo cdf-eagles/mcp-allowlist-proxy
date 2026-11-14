@@ -1,5 +1,10 @@
 # mcp-allowlist-proxy
 
+[![CI](https://github.com/cdf-eagles/mcp-allowlist-proxy/actions/workflows/ci.yaml/badge.svg?branch=main)](https://github.com/cdf-eagles/mcp-allowlist-proxy/actions/workflows/ci.yaml?query=branch%3Amain)
+[![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit)](https://github.com/pre-commit/pre-commit)
+[![Go](https://img.shields.io/github/go-mod/go-version/cdf-eagles/mcp-allowlist-proxy)](go.mod)
+[![License](https://img.shields.io/badge/license-BSD--3--Clause-blue)](LICENSE)
+
 A proxy for Model Context Protocol (MCP) servers that lets through only the
 tools named in an allowlist. It speaks MCP over standard input and output to
 the client, and reaches the server either as a child process (stdio) or as a
@@ -20,19 +25,19 @@ it, can see and call. It does not limit the **server**.
 - The server runs with whatever credentials it is given. If those grant full
   access to the backend (as they do for Uptime Kuma, which has a single
   administrator account), a compromised or malicious server release can use
-  all of it, and the proxy cannot stop it. The server image and everything in
-  it are the trust boundary; pin it by digest (see `servers/uptime-kuma`) and
-  review every bump.
+  all of it, and the proxy cannot stop it. The server image or release binary
+  and everything in it are the trust boundary; pin it by digest or checksum
+  (see `servers/uptime-kuma` and `servers/snyk-cli`) and review every bump.
 - In remote mode the allowlist is enforced where the proxy runs, not at the
   endpoint. Anyone holding the endpoint's bearer token can call every tool
   the server offers directly. Treat that token like the backend credential.
 - The proxy does not inspect tool descriptions or input schemas either. They
   reach the client as the server sends them, and a description can carry
-  instructions meant for the model. CI covers the pinned image only:
+  instructions meant for the model. CI covers the pinned server only:
   `tools.lock` holds a hash of each allowed tool's metadata, and a server
   bump that changes any of it fails until someone regenerates the file and
   reads what changed. A server that answers differently at run time than the
-  image CI tested is not caught.
+  image or release CI tested is not caught.
 - The proxy does not inspect tool arguments or results. An allowed tool can
   do everything that tool does: `updateMonitor` can rewrite a monitor
   completely. Some tools reach further than their names suggest: a
@@ -243,6 +248,65 @@ in `Dockerfile`, decide every new tool in `allowlist.txt` or `hidden.txt`,
 regenerate `tools.lock` and read what each changed tool now says, until CI
 passes, merge, then deploy the same tag and digest and restart the client.
 
+### servers/snyk-cli
+
+For the MCP server built into the [Snyk CLI](https://github.com/snyk/cli)
+(`snyk mcp`), with the `lite` tool profile and folder trust disabled. The CLI
+is a self-contained release binary, not an image, so its pin is
+`SNYK_VERSION` and `SNYK_SHA256` in `.github/workflows/ci.yaml`: CI downloads
+that release, verifies its checksum, and checks its tool list. On the Snyk
+Free and Team plans a personal token authenticates the CLI but has no access
+to the Snyk API, which `servers/pysnyk-mcp` needs.
+
+The allowlist admits 3 of the `lite` profile's 7 tools: `snyk_sca_scan`
+(open source dependencies), `snyk_code_scan` (static analysis), and
+`snyk_version`. `snyk_auth`, `snyk_logout`, `snyk_trust`, and
+`snyk_send_feedback` are in `hidden.txt`. Neither scan registers a project
+for monitoring. `snyk_code_scan` uploads the scanned source to Snyk.
+`snyk_sca_scan` runs the project's package manager, and its `command`
+argument names the Python executable it runs, so a client chooses a program
+that runs on the client machine; the proxy does not inspect arguments.
+
+The server reads the Snyk token from `SNYK_TOKEN` and the organization from
+`SNYK_CFG_ORG`. Client configuration (Claude desktop app,
+`claude_desktop_config.json`), with the token passed from a 1Password secret
+reference by `op run`:
+
+```json
+{
+  "mcpServers": {
+    "snyk-cli": {
+      "command": "/absolute/path/to/op",
+      "args": [
+        "run", "--no-masking", "--",
+        "/absolute/path/to/mcp-allowlist-proxy/bin/mcp-allowlist-proxy",
+        "-allow", "/absolute/path/to/mcp-allowlist-proxy/servers/snyk-cli/allowlist.txt",
+        "--",
+        "/absolute/path/to/snyk", "mcp", "-t", "stdio",
+        "--profile=lite", "--disable-trust"
+      ],
+      "env": {
+        "SNYK_TOKEN": "op://VAULT/ITEM/credential",
+        "SNYK_CFG_ORG": "ORGANIZATION",
+        "SNYK_DISABLE_ANALYTICS": "1"
+      }
+    }
+  }
+}
+```
+
+A client machine that installs the CLI from a package manager can run a
+newer release than the pin. The proxy still hides every tool the allowlist
+does not name, but a changed description of an allowed tool reaches the
+client unchecked until the pin moves.
+
+Upgrading: the weekly Tool drift job opens an issue when a Snyk CLI release
+passes `SNYK_VERSION`. Set the new version and the checksum the release
+publishes, decide every new tool in `allowlist.txt` or `hidden.txt`, run
+`sh scripts/check-server-tools.sh -w bin/mcp-allowlist-proxy servers/snyk-cli -- SNYK mcp -t stdio --profile=lite --disable-trust`
+with `SNYK` replaced by the new release's path, read what each changed tool
+now says, and merge when CI passes.
+
 ## CI
 
 `.github/workflows/ci.yaml` runs on every pull request and push to `main`,
@@ -256,10 +320,11 @@ and weekly:
   release, on an unshallow clone.
 - **Test and build**: `go test -race` with at least 90 percent coverage,
   govulncheck, and builds for macOS (arm64 and amd64) and Linux.
-- **Server allowlists**: for each server, a check that its image is pinned by
-  tag and full digest, then `scripts/check-server-tools.sh` against that
-  image, run with no network, no capabilities, and limited processes and
-  memory. A paged tool list fails the check, and so does an allowed tool whose
+- **Server allowlists**: for each image server, a check that its image is
+  pinned by tag and full digest, then `scripts/check-server-tools.sh` against
+  that image, run with no network, no capabilities, and limited processes and
+  memory; for `snyk-cli`, the same script against the checksum-verified Snyk
+  CLI release, run on the runner with no token. A paged tool list fails the check, and so does an allowed tool whose
   description, input schema, or any other field differs from `tools.lock`.
   `scripts/test-check-server-tools.sh` first tests that script against a fake
   server.
@@ -269,9 +334,9 @@ version; the runner image is pinned to Ubuntu 24.04, whose own packages are
 not. Tool versions live where Dependabot updates them weekly: the Python
 tools in `ci/requirements.txt`, actionlint and the golangci-lint version in
 `.pre-commit-config.yaml`, and govulncheck in `ci/tools/go.mod`, a separate
-module that stays out of the build. gitleaks is pinned with its checksum in
-the workflow, and the weekly run's **Tool drift** job opens an issue when it
-falls behind its latest release.
+module that stays out of the build. gitleaks and the Snyk CLI are pinned
+with their checksums in the workflow, and the weekly run's **Tool drift** job
+opens an issue when either falls behind its latest release.
 
 ## Development
 
