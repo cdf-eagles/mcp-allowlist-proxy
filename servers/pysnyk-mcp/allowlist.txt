@@ -1,0 +1,42 @@
+# Tools of the pysnyk-mcp server (image pinned in Dockerfile) that the
+# proxy lets through.
+# Scope decided 2026-11-14: read organizations, projects, issues, dependencies,
+# licenses, integrations, and tags, and test single package versions; member
+# details stay in the Snyk interface. A tool missing from this file is hidden
+# and refused, so tools added upstream stay blocked until they are listed here.
+# Tool names checked against upstream commit bbfed62
+# (src/pysnyk_mcp/server.py; reviewed 2026-11-14).
+
+# Organizations
+snyk_list_organizations
+snyk_list_org_ids
+snyk_get_organization
+
+# Projects
+snyk_list_projects
+snyk_list_project_ids
+snyk_get_project
+snyk_get_project_dependency_graph
+snyk_list_project_tags
+
+# Issues and CVEs (Common Vulnerabilities and Exposures)
+snyk_list_project_vulnerabilities
+snyk_list_aggregated_issues
+snyk_list_project_cves
+snyk_list_container_projects
+snyk_list_container_image_cves
+
+# Dependencies, licenses, and integrations
+snyk_list_dependencies
+snyk_list_org_licenses
+snyk_list_project_licenses
+snyk_list_integrations
+
+# Package tests; each call counts against the organization's Snyk test limits
+snyk_test_npm_package
+snyk_test_python_package
+snyk_test_maven_package
+snyk_test_rubygem_package
+
+# Account
+snyk_get_user_info

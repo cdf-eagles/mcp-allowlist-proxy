@@ -188,6 +188,21 @@ jobs:
             docker run --rm -i --network none --cap-drop ALL --security-opt no-new-privileges \
             --pids-limit 256 --memory 512m -e UPTIME_KUMA_URL=http://127.0.0.1:9 "${image}"
 
+      - name: Check pysnyk-mcp's tools against its allowlist, hidden list, and tool lock
+        run: |
+          set -euo pipefail
+          test "$(grep -c '^FROM ' servers/pysnyk-mcp/Dockerfile)" -eq 1
+          image=$(sed -n 's/^FROM \([^ ]*\).*/\1/p' servers/pysnyk-mcp/Dockerfile)
+          echo "image: ${image}"
+          if ! printf '%s\n' "${image}" | grep -Eq '^[^@ ]+:[^@: ]+@sha256:[0-9a-f]{64}$'; then
+            echo "the image in servers/pysnyk-mcp/Dockerfile is not pinned by tag and full digest" >&2
+            exit 1
+          fi
+          docker pull --quiet "${image}"
+          sh scripts/check-server-tools.sh bin/mcp-allowlist-proxy servers/pysnyk-mcp -- \
+            docker run --rm -i --network none --cap-drop ALL --security-opt no-new-privileges \
+            --pids-limit 256 --memory 512m "${image}"
+
   tool-drift:
     name: Tool drift
     if: github.event_name == 'schedule'

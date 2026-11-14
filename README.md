@@ -182,6 +182,67 @@ release notes, decide every new tool in `allowlist.txt` or `hidden.txt`,
 regenerate `tools.lock` and read what each changed tool now says, until CI
 passes, merge, then deploy the same tag and digest and restart the client.
 
+### servers/pysnyk-mcp
+
+For [pysnyk-mcp](https://github.com/polarpoint-io/snyk-mcp), a Model
+Context Protocol server for the Snyk API, run as its container image.
+`Dockerfile` is a pin, never built: it records
+`ghcr.io/polarpoint-io/snyk-mcp` by its commit tag `sha-bbfed62` and index
+digest, which is the image CI checks the lists against and the one to deploy.
+Upstream publishes images for linux/amd64 only and tags them by commit, not
+by version.
+
+The allowlist admits 22 of the server's 23 tools, all of which read:
+organizations, projects, issues, CVEs (Common Vulnerabilities and
+Exposures), dependencies, licenses, integrations, project tags, the token's
+own user, and single package tests, which count against the organization's
+Snyk test limits. `snyk_list_members`, which returns every member's name,
+email address, and role, is in `hidden.txt`.
+
+The server reads the Snyk API token from `SNYK_TOKEN` and sends it to
+`SNYK_API_URL` (default `https://api.snyk.io/v1`); leave that variable
+unset. Run it over standard input and output only: its HTTP transport has
+no authentication. The intended deployment runs the image on the client
+machine through Podman, with the proxy in stdio mode in front of it and the
+token passed from a 1Password secret reference by `op run`. Client
+configuration (Claude desktop app, `claude_desktop_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "snyk-api": {
+      "command": "/absolute/path/to/op",
+      "args": [
+        "run", "--no-masking", "--",
+        "/absolute/path/to/mcp-allowlist-proxy/bin/mcp-allowlist-proxy",
+        "-allow", "/absolute/path/to/mcp-allowlist-proxy/servers/pysnyk-mcp/allowlist.txt",
+        "--",
+        "/absolute/path/to/podman", "run", "--rm", "-i",
+        "--platform", "linux/amd64",
+        "--read-only", "--tmpfs", "/tmp",
+        "--cap-drop", "ALL", "--security-opt", "no-new-privileges",
+        "--pids-limit", "256", "--memory", "512m",
+        "-e", "SNYK_TOKEN",
+        "ghcr.io/polarpoint-io/snyk-mcp:sha-bbfed62@sha256:bc19a8b3a434bc38eb51a78612b46d087eaba9958971654b4ff84928f0939307"
+      ],
+      "env": {
+        "SNYK_TOKEN": "op://VAULT/ITEM/credential"
+      }
+    }
+  }
+}
+```
+
+`-e SNYK_TOKEN` passes the value from the proxy's environment, so the token
+never appears on a command line. On an Apple silicon Mac the image runs
+under emulation in the Podman machine.
+
+Upgrading: with no version tags, Dependabot cannot propose a bump. Review
+the upstream source at the new commit, pin its `sha-` tag and index digest
+in `Dockerfile`, decide every new tool in `allowlist.txt` or `hidden.txt`,
+regenerate `tools.lock` and read what each changed tool now says, until CI
+passes, merge, then deploy the same tag and digest and restart the client.
+
 ## CI
 
 `.github/workflows/ci.yaml` runs on every pull request and push to `main`,

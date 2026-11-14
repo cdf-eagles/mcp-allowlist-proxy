@@ -1,0 +1,9 @@
+# Tools of the pysnyk-mcp server (image pinned in Dockerfile) that were
+# reviewed and are deliberately NOT on the allowlist.
+# scripts/check-server-tools.sh (run in CI) fails when the pinned image offers
+# a tool that is in neither file, so a version bump that adds a tool cannot
+# pass until the tool is decided.
+# Reviewed against upstream commit bbfed62 on 2026-11-14.
+
+# Returns every member's name, email address, and role.
+snyk_list_members
