@@ -1,5 +1,8 @@
 # Changelog
 
+- 2026-11-15
+  - SonarCloud analyses the proxy from continuous integration (CI) instead of its automatic analysis, so the analysis now carries test coverage and the quality gate's coverage condition on new code applies. The new `SonarCloud` job runs pysonar, pinned in `ci/requirements.txt`, reading its token from Amazon Web Services (AWS) Systems Manager Parameter Store through OpenID Connect (OIDC). Found internally from backlog item 582.
+
 - 2026-11-14
   - Added `servers/snyk-cli` for the Model Context Protocol (MCP) server built into the Snyk command-line interface (CLI), with the `lite` tool profile and folder trust disabled. The allowlist admits the dependency scan, the static analysis scan, and `snyk_version`, and hides sign-in, sign-out, folder trust, and feedback. Found internally from backlog item 548.
   - The Snyk CLI is pinned as a checksum-verified release in the continuous integration (CI) workflow's `env` (`SNYK_VERSION` 1.1308.4 and `SNYK_SHA256`), which the Server allowlists job downloads and checks, because the CLI is a self-contained binary and its images carry no version tags. Found internally from backlog item 548.

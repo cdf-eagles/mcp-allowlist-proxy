@@ -328,6 +328,16 @@ and weekly:
   description, input schema, or any other field differs from `tools.lock`.
   `scripts/test-check-server-tools.sh` first tests that script against a fake
   server.
+- **SonarCloud**: the tests with a coverage profile (`coverage.out`), then the
+  analysis and the coverage sent to SonarCloud with pysonar, configured by
+  `sonar-project.properties`; fails when the quality gate fails, which
+  includes 80 percent coverage of new code. It reads its SonarCloud token from
+  Amazon Web Services (AWS) Systems Manager Parameter Store through a role it
+  assumes with the run's OpenID Connect (OIDC) token; the role's Amazon
+  Resource Name (ARN) is the `AWS_SONARCLOUD_ROLE_ARN` secret. It runs on
+  pushes to `main` and on pull requests from this repository's own branches;
+  Dependabot and fork pull requests receive no OIDC token and skip it, and
+  `main` is analysed when their change merges.
 
 Every action is pinned to a commit, and every tool CI installs to an exact
 version; the runner image is pinned to Ubuntu 24.04, whose own packages are

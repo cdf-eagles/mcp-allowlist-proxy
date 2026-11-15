@@ -223,6 +223,77 @@ jobs:
           sh scripts/check-server-tools.sh bin/mcp-allowlist-proxy servers/snyk-cli -- \
             "${RUNNER_TEMP}/snyk" mcp -t stdio --profile=lite --disable-trust
 
+  # Dependabot and fork pull requests receive no OpenID Connect token, so they
+  # skip the analysis; main is analysed when their change merges.
+  sonarcloud:
+    name: SonarCloud
+    if: >-
+      github.event_name == 'push' ||
+      (github.event_name == 'pull_request' &&
+       github.actor != 'dependabot[bot]' &&
+       github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      AWS_REGION: us-east-1
+      AWS_DEFAULT_REGION: us-east-1
+    steps:
+      - name: Check out the full history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e  # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - name: Install the Python tools
+        run: |
+          set -euo pipefail
+          python3 -m venv "${RUNNER_TEMP}/venv"
+          "${RUNNER_TEMP}/venv/bin/pip" install --quiet --require-virtualenv -r ci/requirements.txt
+          echo "${RUNNER_TEMP}/venv/bin" >> "${GITHUB_PATH}"
+
+      - name: Test with coverage
+        run: go test -coverprofile=coverage.out ./...
+
+      # The runner's own AWS command line exchanges the job's OpenID Connect
+      # token for a role session that can read only the SonarCloud token, which
+      # stays inside this step. sonar-project.properties sets the quality gate
+      # wait, so a failed gate fails the step.
+      - name: Analyse with SonarCloud
+        env:
+          ROLE_ARN: ${{ secrets.AWS_SONARCLOUD_ROLE_ARN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${ROLE_ARN}" ]; then
+            echo "::error::AWS_SONARCLOUD_ROLE_ARN is not set for this run"
+            exit 1
+          fi
+          oidc=$(curl --proto "=https" --tlsv1.2 -sSf -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=sts.amazonaws.com" | jq -r .value)
+          creds=$(aws sts assume-role-with-web-identity \
+            --role-arn "${ROLE_ARN}" \
+            --role-session-name "gha-sonarcloud-${GITHUB_RUN_ID}" \
+            --web-identity-token "${oidc}" \
+            --duration-seconds 900 \
+            --query 'Credentials.[AccessKeyId,SecretAccessKey,SessionToken]' \
+            --output text)
+          read -r key secret session <<< "${creds}"
+          echo "::add-mask::${secret}"
+          echo "::add-mask::${session}"
+          token=$(AWS_ACCESS_KEY_ID="${key}" AWS_SECRET_ACCESS_KEY="${secret}" AWS_SESSION_TOKEN="${session}" \
+            aws ssm get-parameter --name /ci/sonarcloud/token --with-decryption --query Parameter.Value --output text)
+          echo "::add-mask::${token}"
+          unset oidc creds key secret session
+          test -n "${token}"
+          SONAR_TOKEN="${token}" pysonar
+
   tool-drift:
     name: Tool drift
     if: github.event_name == 'schedule'
