@@ -294,6 +294,49 @@ jobs:
           test -n "${token}"
           SONAR_TOKEN="${token}" pysonar
 
+  snyk:
+    name: Snyk
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+
+      # The Snyk CLI reads the dependency tree from the installed packages.
+      - name: Install the Python tools
+        run: |
+          set -euo pipefail
+          python3 -m venv "${RUNNER_TEMP}/venv"
+          "${RUNNER_TEMP}/venv/bin/pip" install --quiet --require-virtualenv -r ci/requirements.txt
+
+      - name: Install the Snyk CLI
+        run: |
+          set -euo pipefail
+          curl --proto "=https" --tlsv1.2 -sSfL -o "${RUNNER_TEMP}/snyk" \
+            "https://github.com/snyk/cli/releases/download/v${SNYK_VERSION}/snyk-linux"
+          echo "${SNYK_SHA256}  ${RUNNER_TEMP}/snyk" | sha256sum -c -
+          chmod 755 "${RUNNER_TEMP}/snyk"
+          "${RUNNER_TEMP}/snyk" --version
+
+      # Fails on any high or critical issue in the CI tool pins, on a scan
+      # error, and when ci/requirements.txt is missing, so the required check
+      # fails closed. Dependabot pull requests read SNYK_TOKEN from the
+      # Dependabot secrets.
+      - name: Fail on high or critical dependency issues
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+          SNYK_DISABLE_ANALYTICS: 1
+        run: |
+          set -euo pipefail
+          if [ -z "${SNYK_TOKEN}" ]; then
+            echo "::error::SNYK_TOKEN is not set for this run"
+            exit 1
+          fi
+          "${RUNNER_TEMP}/snyk" test --file=ci/requirements.txt --package-manager=pip \
+            --command="${RUNNER_TEMP}/venv/bin/python" --severity-threshold=high
+
   tool-drift:
     name: Tool drift
     if: github.event_name == 'schedule'
