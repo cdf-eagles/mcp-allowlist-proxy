@@ -148,6 +148,17 @@ jobs:
       - name: Run govulncheck
         run: go tool -modfile=ci/tools/go.mod govulncheck ./...
 
+      # Snyk finds no packages in ci/tools/go.mod, which holds only tool
+      # directives, so it tests none of the tools' dependencies. Build
+      # govulncheck from that module and scan the binary's embedded module
+      # list; a called vulnerability fails the job.
+      - name: Run govulncheck on the CI tool module
+        run: |
+          set -euo pipefail
+          go build -modfile=ci/tools/go.mod -trimpath -o "${RUNNER_TEMP}/govulncheck" \
+            golang.org/x/vuln/cmd/govulncheck
+          "${RUNNER_TEMP}/govulncheck" -mode=binary "${RUNNER_TEMP}/govulncheck"
+
       - name: Build for macOS and Linux
         run: |
           for target in darwin/arm64 darwin/amd64 linux/amd64; do
