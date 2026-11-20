@@ -1,5 +1,7 @@
 # Changelog
 
+- 2026-11-19
+  - Dependabot raised the `servers/uptime-kuma` pin to mcp-uptime-kuma 0.15.0, which adds the read-only `getMonitorTypeFields` tool and moves type-specific monitor settings into a `typeFields` argument of `createMonitor` and `updateMonitor`. The allowlist admits `getMonitorTypeFields`, since those two tools no longer describe the fields themselves, and `tools.lock` holds the new hashes; every tool's other fields changed because 0.15.0 adds Model Context Protocol (MCP) annotations (read-only, destructive, and idempotent hints) to all of them.
 - 2026-11-18
   - A Snyk job in continuous integration (CI) tests the Python tools pinned in `ci/requirements.txt`, which Snyk's repository import skips, and fails on any high or critical issue, a scan error, or a missing `SNYK_TOKEN` secret. The Snyk CLI 1.1308.4 is downloaded from its GitHub release and verified by its checksum; found internally from backlog item 572.
 - 2026-11-15
