@@ -338,6 +338,11 @@ and weekly:
   pushes to `main` and on pull requests from this repository's own branches;
   Dependabot and fork pull requests receive no OIDC token and skip it, and
   `main` is analysed when their change merges.
+- **Snyk**: the Python tools pinned in `ci/requirements.txt`, tested with the
+  Snyk CLI; fails on any high or critical dependency issue, a scan error, or
+  a missing `SNYK_TOKEN` secret, which is set both as an Actions secret and
+  as a Dependabot secret because Dependabot's pull requests cannot read
+  Actions secrets.
 
 Every action is pinned to a commit, and every tool CI installs to an exact
 version; the runner image is pinned to Ubuntu 24.04, whose own packages are
