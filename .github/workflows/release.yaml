@@ -1,0 +1,201 @@
+---
+name: Release
+
+# yamllint disable-line rule:truthy
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  PROJECT: mcp-allowlist-proxy
+
+jobs:
+  verify:
+    name: Verify the tag
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    outputs:
+      kind: ${{ steps.check.outputs.kind }}
+      version: ${{ steps.check.outputs.version }}
+      rc_tag: ${{ steps.check.outputs.rc_tag }}
+    steps:
+      - name: Check out code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Check the tag
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -eu
+          sha=$(git rev-list -n 1 "$TAG")
+          if [ "$(git cat-file -t "$TAG")" != tag ]; then
+            echo "::error::$TAG is not an annotated tag"; exit 1
+          fi
+          verified=$(gh api "repos/${GITHUB_REPOSITORY}/git/tags/$(git rev-parse "$TAG")" --jq .verification.verified)
+          if [ "$verified" != true ]; then
+            echo "::error::$TAG is not a verified signed tag"; exit 1
+          fi
+          case "$TAG" in
+            v[0-9]*.[0-9]*.[0-9]*-rc.[0-9]*)
+              version=${TAG#v}; version=${version%-rc.*}
+              case "$version" in *[!0-9.]*) echo "::error::unsupported tag $TAG"; exit 1 ;; esac
+              if ! git merge-base --is-ancestor "$sha" origin/main; then
+                echo "::error::$TAG is not on main"; exit 1
+              fi
+              { echo "kind=rc"; echo "version=$version"; echo "rc_tag=$TAG"; } >> "$GITHUB_OUTPUT"
+              ;;
+            v[0-9]*.[0-9]*.[0-9]*)
+              version=${TAG#v}
+              case "$version" in *[!0-9.]*) echo "::error::unsupported tag $TAG"; exit 1 ;; esac
+              if ! git merge-base --is-ancestor "$sha" origin/main; then
+                echo "::error::$TAG is not on main"; exit 1
+              fi
+              rc=$(git tag --points-at "$sha" --list "v${version}-rc.*" --sort=-version:refname | head -n 1)
+              if [ -z "$rc" ]; then
+                echo "::error::no release candidate tag v${version}-rc.N points at $sha"; exit 1
+              fi
+              { echo "kind=final"; echo "version=$version"; echo "rc_tag=$rc"; } >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "::error::unsupported tag $TAG"; exit 1
+              ;;
+          esac
+
+  build:
+    name: Test and build the binaries
+    needs: verify
+    if: needs.verify.outputs.kind == 'rc'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e  # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - name: Test with the race detector
+        run: go test -race ./...
+
+      - name: Build for macOS and Linux
+        env:
+          VERSION: ${{ needs.verify.outputs.version }}
+        run: |
+          set -eu
+          mkdir -p dist
+          for target in darwin/arm64 darwin/amd64 linux/amd64; do
+            os=${target%/*}; arch=${target#*/}
+            CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" go build -trimpath \
+              -ldflags "-s -w -X main.version=${VERSION}" \
+              -o "dist/${PROJECT}-${os}-${arch}" ./cmd/mcp-allowlist-proxy
+          done
+
+      - name: Check the version the binary reports
+        env:
+          VERSION: ${{ needs.verify.outputs.version }}
+        run: test "$("dist/${PROJECT}-linux-amd64" -version)" = "$VERSION"
+
+      - name: Upload
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: error
+
+  publish-rc:
+    name: Publish the release candidate
+    needs: [verify, build]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - name: Check out code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Download
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8.0.2
+        with:
+          name: dist
+          path: dist/
+
+      - name: Write checksums
+        working-directory: dist
+        run: sha256sum -- * > SHA256SUMS
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8  # v4.2.2
+        with:
+          subject-checksums: dist/SHA256SUMS
+
+      - name: Create the pre-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          VERSION: ${{ needs.verify.outputs.version }}
+        run: gh release create "$TAG" dist/* --verify-tag --prerelease --title "$TAG" --notes "Release candidate for v${VERSION}. See CHANGELOG.md."
+
+  publish-final:
+    name: Publish the release from its release candidate
+    needs: verify
+    if: needs.verify.outputs.kind == 'final'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      attestations: read
+    steps:
+      - name: Check out code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Download the release candidate files
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RC_TAG: ${{ needs.verify.outputs.rc_tag }}
+        run: gh release download "$RC_TAG" --dir dist
+
+      - name: Check the files against the release candidate checksums
+        working-directory: dist
+        run: sha256sum -c SHA256SUMS
+
+      - name: Verify the release candidate attestations
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RC_TAG: ${{ needs.verify.outputs.rc_tag }}
+        working-directory: dist
+        run: |
+          set -eu
+          awk '{print $2}' SHA256SUMS | while read -r f; do
+            gh attestation verify "$f" --repo "$GITHUB_REPOSITORY" \
+              --signer-workflow "${GITHUB_REPOSITORY}/.github/workflows/release.yaml" \
+              --source-ref "refs/tags/${RC_TAG}"
+          done
+
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          RC_TAG: ${{ needs.verify.outputs.rc_tag }}
+        run: gh release create "$TAG" dist/* --verify-tag --latest --title "$TAG" --notes "Promoted from ${RC_TAG} without rebuilding. See CHANGELOG.md."
