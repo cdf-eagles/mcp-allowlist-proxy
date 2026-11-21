@@ -1,5 +1,8 @@
 # Changelog
 
+- 2026-11-21
+  - Releases: a signed release candidate tag `vX.Y.Z-rc.N` on `main` runs the new Release workflow, which tests, builds the macOS (arm64 and amd64) and Linux (amd64) binaries with `-version` set from the tag, and publishes a pre-release with a `SHA256SUMS` file and build provenance attestations; a signed `vX.Y.Z` tag on the same commit publishes the candidate's own files, checked against both, without rebuilding. Found internally from backlog item 573.
+  - `scripts/next-version.sh` proposes the next version from the branch prefixes of the pull requests merged since the last release (`fix/` patch, `feat/` minor, `major/` major), and `CONTRIBUTING.md` covers the branch prefixes and cutting a release.
 - 2026-11-19
   - Dependabot raised the `servers/uptime-kuma` pin to mcp-uptime-kuma 0.15.0, which adds the read-only `getMonitorTypeFields` tool and moves type-specific monitor settings into a `typeFields` argument of `createMonitor` and `updateMonitor`. The allowlist admits `getMonitorTypeFields`, since those two tools no longer describe the fields themselves, and `tools.lock` holds the new hashes; every tool's other fields changed because 0.15.0 adds Model Context Protocol (MCP) annotations (read-only, destructive, and idempotent hints) to all of them.
 - 2026-11-18

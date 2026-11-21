@@ -48,7 +48,13 @@ repository and are not repeated here.
   `env`. Never
   use `@latest` or a floating major.
 - Branches: `main` only; work branches are squash merged into `main` by pull
-  request.
+  request. Work branch prefixes are `fix/`, `feat/`, `major/`, `build/`, and
+  `ignore/`; the prefix sets the next release's version bump (patch, minor,
+  major; `build/` and `ignore/` none), as `CONTRIBUTING.md` describes.
+- Releases: `.github/workflows/release.yaml` builds the binaries from a
+  signed `vX.Y.Z-rc.N` tag on `main`, with the version set by `-ldflags`,
+  and a signed `vX.Y.Z` tag on the same commit republishes the candidate's
+  files without rebuilding. The release targets match CI's build matrix.
 
 ## Servers
 

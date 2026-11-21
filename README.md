@@ -58,7 +58,47 @@ Go 1.27.4 or later, no other dependencies:
 go build -o bin/mcp-allowlist-proxy ./cmd/mcp-allowlist-proxy
 ```
 
-`bin/` is ignored by git.
+`bin/` is ignored by git. A build from source reports its version as `dev`;
+a release binary reports its release (`mcp-allowlist-proxy -version`).
+
+## Releases
+
+Each release on the
+[releases page](https://github.com/cdf-eagles/mcp-allowlist-proxy/releases)
+holds a binary for macOS (`darwin-arm64`, `darwin-amd64`) and Linux
+(`linux-amd64`), a `SHA256SUMS` file, and a build provenance attestation for
+every binary. To check a download before running it, for example the macOS
+arm64 binary:
+
+```sh
+grep ' mcp-allowlist-proxy-darwin-arm64$' SHA256SUMS | shasum -a 256 -c
+gh attestation verify mcp-allowlist-proxy-darwin-arm64 --repo cdf-eagles/mcp-allowlist-proxy
+```
+
+The binaries are not notarized, so macOS refuses to start one that a web
+browser downloaded until its quarantine attribute is removed
+(`xattr -d com.apple.quarantine mcp-allowlist-proxy-darwin-arm64`);
+`gh release download` sets no such attribute.
+
+Work is squash merged into `main` from `fix/`, `feat/`, `major/`, `build/`,
+or `ignore/` branches, and the prefix decides the next version: `fix/` a
+patch, `feat/` a minor, and `major/` a major release. `build/`, `ignore/`,
+and Dependabot pull requests do not bump the version and ship with the next
+release. A release is cut from `main`:
+
+1. `scripts/next-version.sh` proposes the next version from the branch
+   prefixes of the pull requests merged since the last release tag (it looks
+   them up with the GitHub CLI, `gh`) and prints the tag commands.
+2. A signed release candidate tag `vX.Y.Z-rc.N` on a `main` commit runs
+   `.github/workflows/release.yaml`, which refuses a tag that is not
+   annotated, not verified-signed, or not on `main`, then tests, builds the
+   binaries with the version set from the tag, and publishes a pre-release.
+3. After the release candidate is proven, the same commit is tagged
+   `vX.Y.Z`. The workflow checks the release candidate's files against its
+   checksums and attestations and publishes those same files as the
+   release; nothing is rebuilt.
+
+See `CONTRIBUTING.md` for cutting a release and `CHANGELOG.md` for changes.
 
 ## Usage
 
@@ -353,7 +393,11 @@ module that stays out of the build. gitleaks and the Snyk CLI are pinned
 with their checksums in the workflow, and the weekly run's **Tool drift** job
 opens an issue when either falls behind its latest release.
 
+`.github/workflows/release.yaml` runs only for `v*` tags; see Releases.
+
 ## Development
+
+See also `CONTRIBUTING.md`.
 
 Gates before committing: `go test -race ./...` (coverage at least 90
 percent), `golangci-lint run ./...` for `GOOS=linux` and `GOOS=darwin` with
