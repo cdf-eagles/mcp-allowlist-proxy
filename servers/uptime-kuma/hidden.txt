@@ -3,17 +3,48 @@
 # scripts/check-server-tools.sh (run in CI) fails when the pinned image offers
 # a tool that is in neither file, so a version bump that adds a tool cannot
 # pass until the tool is decided.
-# Reviewed against v0.15.0 on 2026-11-19 (decided 2026-10-19: no deletes, no status-page or
+# Reviewed against v0.17.0 on 2026-11-21 (decided 2026-10-19: no deletes, no status-page or
 # Docker-host changes).
 
+# Deletes
 deleteMonitor
 deleteNotification
 deleteTag
-deleteMaintenance
+deleteMaintenanceWindow
+
+# Status pages and their incidents
 createStatusPage
 updateStatusPage
 deleteStatusPage
-addDockerHost
+createIncident
+updateIncident
+resolveIncident
+deleteIncident
+
+# Docker hosts
+createDockerHost
 updateDockerHost
 deleteDockerHost
 testDockerHost
+
+# Added 2026-11-21 with 0.17.0 and refused: history and database resets,
+# general settings, proxies, remote browsers, API keys (listing included,
+# since it is next to credentials), and host-side helpers.
+clearMonitorEvents
+clearMonitorHeartbeats
+clearAllStatistics
+shrinkDatabase
+updateSettings
+createProxy
+updateProxy
+deleteProxy
+createRemoteBrowser
+updateRemoteBrowser
+deleteRemoteBrowser
+testRemoteBrowser
+listAPIKeys
+createAPIKey
+setAPIKeyActive
+deleteAPIKey
+testChrome
+listPM2Processes

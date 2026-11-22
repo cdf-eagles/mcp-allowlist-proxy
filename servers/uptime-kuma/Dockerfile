@@ -2,4 +2,4 @@
 # allowlist and hidden list were reviewed against, so Dependabot can propose
 # a bump and CI checks the tool list of exactly this image. Deploy the same
 # tag and digest.
-FROM docker.io/davidfuchs/mcp-uptime-kuma:0.15.0@sha256:9e5357269525f5d2220e76fcd2ee8055aebc85aa94f8e03189236f9e73ad8308
+FROM docker.io/davidfuchs/mcp-uptime-kuma:0.17.0@sha256:fe43a154b3992281a1f05b8a383181697a34105e1bf03efe64f1855c2d0d91f5

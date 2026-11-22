@@ -28,7 +28,11 @@ while IFS= read -r line; do
 		echo '{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2025-06-18","capabilities":{"tools":{}},"serverInfo":{"name":"fake","version":"1"}}}'
 		;;
 	*'"method":"tools/list"'*)
-		printf '{"jsonrpc":"2.0","id":2,"result":{"tools":%s}}\n' "$(cat "$FAKE_TOOLS")"
+		if [ -n "${FAKE_CURSOR:-}" ]; then
+			printf '{"jsonrpc":"2.0","id":2,"result":{"tools":%s,"nextCursor":"%s"}}\n' "$(cat "$FAKE_TOOLS")" "$FAKE_CURSOR"
+		else
+			printf '{"jsonrpc":"2.0","id":2,"result":{"tools":%s}}\n' "$(cat "$FAKE_TOOLS")"
+		fi
 		;;
 	esac
 done
@@ -126,6 +130,26 @@ expect_fail "a malformed entry fails" 'malformed line in tools.lock'
 cp "$tmp/lock.full" "$srv/tools.lock"
 check
 expect_pass "the restored tools.lock passes"
+
+# A paged list tool declares nextCursor in its own outputSchema; that is not a
+# paged tool list (mcp-uptime-kuma 0.17.0).
+tools '"First tool."' "$base_schema" ',"outputSchema":{"type":"object","properties":{"nextCursor":{"type":"string"}}}'
+check -w
+if [ "$rc" -eq 0 ] && grep -q '^WROTE: ' "$tmp/log"; then
+	ok "-w accepts a tool whose outputSchema names nextCursor"
+else
+	bad "-w accepts a tool whose outputSchema names nextCursor (status $rc)"
+fi
+check
+expect_pass "a tool whose outputSchema names nextCursor passes"
+
+export FAKE_CURSOR=page2
+check
+unset FAKE_CURSOR
+expect_fail "a paged tool list fails" 'the server pages its tool list'
+
+tools '"First tool."' "$base_schema" ''
+cp "$tmp/lock.full" "$srv/tools.lock"
 
 if [ "$failures" -ne 0 ]; then
 	echo "$failures check(s) failed" >&2
