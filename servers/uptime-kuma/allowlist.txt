@@ -4,7 +4,10 @@
 # Every delete*, status-page change, and Docker-host change stays in the
 # Uptime Kuma interface. A tool missing from this file is hidden and refused,
 # so tools added upstream stay blocked until they are listed here.
-# Tool names checked against upstream v0.15.0 (src/tools/; reviewed 2026-11-19).
+# Tool names checked against upstream v0.17.0 (src/tools/; reviewed 2026-11-21).
+# Added 2026-11-21 with 0.17.0: the read-only tools other than listAPIKeys and
+# listPM2Processes, updateTag, and testNotification (sends one real message
+# through a saved channel).
 
 # Read
 getMonitorSummary
@@ -12,29 +15,38 @@ listMonitors
 listMonitorTypes
 getMonitorTypeFields
 getMonitor
+getMonitorUptime
 listHeartbeats
-getHeartbeats
 listNotifications
+listNotificationTypes
+getNotificationTypeFields
 listTags
-getMaintenanceWindows
+listMaintenanceWindows
+listIncidents
 listStatusPages
 getStatusPage
 listDockerHosts
+listProxies
+listRemoteBrowsers
 getSettings
+getDatabaseInfo
+getPushExample
+checkDomainExpirySupport
+listGames
 
 # Monitors: create, change, pause, and resume (pause instead of delete)
 createMonitor
 updateMonitor
-pauseMonitor
-resumeMonitor
+setMonitorActive
 
-# Notifications and tags: add and change
-addNotification
+# Notifications and tags: add, change, and test a notification
+createNotification
 updateNotification
-addTag
+testNotification
+createTag
+updateTag
 
 # Maintenance windows: create, change, pause, and resume
-createMaintenance
-updateMaintenance
-pauseMaintenance
-resumeMaintenance
+createMaintenanceWindow
+updateMaintenanceWindow
+setMaintenanceWindowActive

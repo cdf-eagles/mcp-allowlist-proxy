@@ -189,13 +189,18 @@ lock, and the pin of the server they were reviewed against.
 
 For [mcp-uptime-kuma](https://github.com/DavidFuchs/mcp-uptime-kuma), run as
 its container image. `Dockerfile` is a pin, never built: it records
-`davidfuchs/mcp-uptime-kuma` **0.15.0** by tag and digest, which is the image
+`davidfuchs/mcp-uptime-kuma` **0.17.0** by tag and digest, which is the image
 CI checks the lists against and the one to deploy.
 
-The allowlist admits reading, and creating, changing, pausing, and resuming
-monitors, notifications, tags, and maintenance windows, and describing a
-monitor type's fields (25 of the server's 36 tools); every delete and every
-status-page and Docker-host change is in `hidden.txt`.
+The allowlist admits reading (monitors and their uptime, heartbeats,
+notifications and their types, tags, maintenance windows, incidents, status
+pages, Docker hosts, proxies, remote browsers, settings, and database
+information), the setup helpers that change nothing, creating, changing,
+pausing, and resuming monitors and maintenance windows, creating and changing
+notifications and tags, and sending a test notification (34 of the server's
+67 tools). Every delete; every status-page, incident, Docker-host, proxy,
+remote-browser, API-key, and settings change; every history or database
+reset; and the API key list are in `hidden.txt`.
 
 The intended deployment runs the image on a server with its Streamable HTTP
 transport (`-t streamable-http`), its bearer token (`MCP_AUTH_TOKEN`) set, and

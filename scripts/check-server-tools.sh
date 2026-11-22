@@ -93,8 +93,14 @@ if [ -z "$line" ]; then
 fi
 echo "$line"
 
-# A paged tool list would leave the later pages unchecked.
-if grep -q '"nextCursor"' "$tmp/out"; then
+# A paged tool list would leave the later pages unchecked. Read the reply's
+# own nextCursor, as the proxy does: a tool's schema may name a nextCursor
+# property of its own (paged list tools do).
+cursor=$(jq -r 'select(.id == 2) | .result.nextCursor // empty' "$tmp/out") || {
+	echo "FAIL: cannot read the tools/list reply" >&2
+	exit 1
+}
+if [ -n "$cursor" ]; then
 	echo "FAIL: the server pages its tool list; this check reads one page only" >&2
 	exit 1
 fi
