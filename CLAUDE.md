@@ -44,9 +44,10 @@ repository and are not repeated here.
   in a comment; tools and the runner image are pinned to a version. Tool
   versions live in `ci/requirements.txt`, `.pre-commit-config.yaml`, and
   `ci/tools/go.mod`, where Dependabot updates them; only a release download
-  verified by checksum (gitleaks, the Snyk CLI) is pinned in the workflow's
-  `env`. Never
-  use `@latest` or a floating major.
+  verified by checksum (gitleaks, the Snyk CLI) and `PYTHON_VERSION`, the full
+  patch release of Python that `actions/setup-python` installs in every job
+  that runs Python, are pinned in the workflow's `env`. Never use `@latest` or
+  a floating major.
 - Branches: `main` only; work branches are squash merged into `main` by pull
   request. Work branch prefixes are `fix/`, `feat/`, `major/`, `build/`, and
   `ignore/`; the prefix sets the next release's version bump (patch, minor,
