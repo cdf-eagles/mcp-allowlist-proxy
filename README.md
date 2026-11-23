@@ -391,12 +391,14 @@ and weekly:
 
 Every action is pinned to a commit, and every tool CI installs to an exact
 version; the runner image is pinned to Ubuntu 24.04, whose own packages are
-not. Tool versions live where Dependabot updates them weekly: the Python
-tools in `ci/requirements.txt`, actionlint and the golangci-lint version in
-`.pre-commit-config.yaml`, and govulncheck in `ci/tools/go.mod`, a separate
-module that stays out of the build. gitleaks and the Snyk CLI are pinned
-with their checksums in the workflow, and the weekly run's **Tool drift** job
-opens an issue when either falls behind its latest release.
+not, so the Python the tools run on is installed by `actions/setup-python`
+at the exact patch release in `PYTHON_VERSION`. Tool versions live where
+Dependabot updates them weekly: the Python tools in `ci/requirements.txt`,
+actionlint and the golangci-lint version in `.pre-commit-config.yaml`, and
+govulncheck in `ci/tools/go.mod`, a separate module that stays out of the
+build. gitleaks and the Snyk CLI are pinned with their checksums in the
+workflow, and the weekly run's **Tool drift** job opens an issue when either
+falls behind its latest release.
 
 `.github/workflows/release.yaml` runs only for `v*` tags; see Releases.
 
